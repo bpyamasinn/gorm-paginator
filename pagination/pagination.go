@@ -28,7 +28,7 @@ type Paginator struct {
 }
 
 // Paging 分页
-func Paging(p *Param, result interface{}) *Paginator {
+func Paging(p *Param, result interface{}) (*Paginator, error) {
 	db := p.DB
 
 	if p.ShowSQL {
@@ -59,7 +59,9 @@ func Paging(p *Param, result interface{}) *Paginator {
 		offset = (p.Page - 1) * p.Limit
 	}
 
-	db.Limit(p.Limit).Offset(offset).Find(result)
+	if err := db.Limit(p.Limit).Offset(offset).Find(result).Error; err != nil {
+		return nil, err
+	}
 	<-done
 
 	paginator.TotalRecord = count
@@ -81,10 +83,18 @@ func Paging(p *Param, result interface{}) *Paginator {
 	} else {
 		paginator.NextPage = p.Page + 1
 	}
-	return &paginator
+
+	for _, err := range db.GetErrors() {
+		return nil, err
+	}
+
+	return &paginator, nil
 }
 
-func countRecords(db *gorm.DB, anyType interface{}, done chan bool, count *int) {
-	db.Model(anyType).Count(count)
+func countRecords(db *gorm.DB, anyType interface{}, done chan bool, count *int) error {
+	if err := db.Model(anyType).Count(count).Error; err != nil {
+		return err
+	}
 	done <- true
+	return nil
 }
